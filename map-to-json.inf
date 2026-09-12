@@ -1,0 +1,134 @@
+#!/usr/bin/infernal
+
+# =====================================================================
+#         Convierte un archivo .map de Infernal a JSON
+# =====================================================================
+#
+#  Uso:
+#      infernal j.inf <entrada.map>                 -> JSON a stdout
+#      infernal j.inf <entrada.map> <salida.json>   -> JSON a archivo
+#
+#  Nota: los .list de Infernal ya son JSON válido (list ≡ array de JS),
+#  así que no hace falta convertirlos. Solo se procesan .map aquí.
+#
+#  Nota: fromfile()/test -e resuelven rutas relativas contra el
+#  directorio del script, no contra CWD. Este script hace la ruta
+#  absoluta contra CWD antes de usarla.
+#
+#  Licencia: MIT
+# =====================================================================
+
+flags(1,
+    input  = string in_path
+    output = string out_path
+    empty  = string out_path {
+        if not out_path then
+            out_path = ""
+        fi
+    }
+)
+
+if not in_path then
+    error("Uso: infernal j.inf <entrada.map> [salida.json]")
+fi
+
+# --- Resolver la ruta de entrada contra CWD (no contra el script) ---
+if not starts($in_path, "/") then
+    string cwd = pwd
+    in_path = $cwd + "/" + $in_path
+fi
+
+# --- Comprobar existencia con `test -e` (asignado a bool) ---
+bool existe = test -e $in_path
+if not existe then
+    error("No existe el archivo: " + $in_path)
+fi
+
+# --- Escapa una cadena para incrustarla en un string JSON ---
+function json_escape(string s)
+    string r = replace($s, "\\", "\\\\")
+    r = replace($r, "\"", "\\\"")
+    r = replace($r, "\n", "\\n")
+    r = replace($r, "\r", "\\r")
+    r = replace($r, "\t", "\\t")
+    return "\"" + $r + "\""
+fi
+
+# --- Serializa recursivamente un valor de Infernal a JSON.
+#     Solo se usa sobre maps y sus contenidos; si aparece un list
+#     anidado, también se serializa correctamente. ---
+function to_json(v)
+    string t = vartype($v)
+
+    if $t == "null" then
+        return "null"
+    fi
+
+    if $t == "bool" then
+        if $v then
+            return "true"
+        fi
+        return "false"
+    fi
+
+    if $t == "int" then
+        return "" + $v
+    fi
+
+    if $t == "float" then
+        return "" + $v
+    fi
+
+    if $t == "string" then
+        return json_escape($v)
+    fi
+
+    if $t == "list" then
+        string s = "["
+        bool first = true
+        for item in $v then
+            if not first then
+                s = $s + ","
+            fi
+            first = false
+            s = $s + to_json($item)
+        fi
+        return $s + "]"
+    fi
+
+    if $t == "map" then
+        string s = "{"
+        bool first = true
+        for k in $v then
+            if not first then
+                s = $s + ","
+            fi
+            first = false
+            s = $s + json_escape($k) + ":" + to_json($v[$k])
+        fi
+        return $s + "}"
+    fi
+
+    return "null"
+fi
+
+# --- Flujo principal ---
+
+global map data = []
+data = fromfile($in_path)
+
+string json_str = to_json($data)
+
+if $out_path == "" then
+    print($json_str)
+else
+    if has($out_path, "'") then
+        error("La ruta de salida no puede contener comillas simples: " + $out_path)
+    fi
+    string cmd = "cat > '" + $out_path + "' << 'INFERNAL_JSON_EOF'\n" + $json_str + "\nINFERNAL_JSON_EOF\n"
+    int code = exited($cmd)
+    if $code != 0 then
+        error("No se pudo escribir el archivo: " + $out_path)
+    fi
+    print("JSON escrito en: " + $out_path)
+fi
