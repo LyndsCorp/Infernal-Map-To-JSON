@@ -5,8 +5,8 @@
 # =====================================================================
 #
 #  Uso:
-#      infernal j.inf <entrada.map>                 -> JSON a stdout
-#      infernal j.inf <entrada.map> <salida.json>   -> JSON a archivo
+#      infernal map-to-json.inf <entrada.map>                 -> JSON a stdout
+#      infernal map-to-json.inf <entrada.map> <salida.json>   -> JSON a archivo
 #
 #  Nota: los .list de Infernal ya son JSON válido (list ≡ array de JS),
 #  así que no hace falta convertirlos. Solo se procesan .map aquí.
