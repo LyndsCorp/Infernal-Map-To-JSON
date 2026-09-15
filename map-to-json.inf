@@ -18,95 +18,134 @@
 #  Licencia: MIT
 # =====================================================================
 
-flags(1,
-    input  = string in_path
-    output = string out_path
-    empty  = string out_path {
-        if not out_path then
-            out_path = ""
-        fi
+flags(0,
+    --oneline {
+        oneline = true
     }
 )
 
-if not in_path then
+flags(1,
+    empty  = string ruta_entrada
+)
+
+flags(2,
+    empty = string ruta_salida
+)
+
+if not ruta_salida then
+    string ruta_salida = ""
+fi
+
+# Si oneline es true, el JSON se escribe todo en una sola línea (compacto).
+# Si es false, se escribe con indentación de 2 espacios.
+if not oneline then
+    bool oneline = false
+fi
+
+if not ruta_entrada then
     error("Uso: infernal j.inf <entrada.map> [salida.json]")
 fi
 
 # --- Resolver la ruta de entrada contra CWD (no contra el script) ---
-if not starts($in_path, "/") then
-    string cwd = pwd
-    in_path = $cwd + "/" + $in_path
+if not starts($ruta_entrada, "/") then
+    local string directorio_actual = pwd
+    ruta_entrada = $directorio_actual + "/" + $ruta_entrada
 fi
 
 # --- Comprobar existencia con `test -e` (asignado a bool) ---
-bool existe = test -e $in_path
-if not existe then
-    error("No existe el archivo: " + $in_path)
+local bool archivo_existe = test -e $ruta_entrada
+if not archivo_existe then
+    error("No existe el archivo: " + $ruta_entrada)
 fi
 
 # --- Escapa una cadena para incrustarla en un string JSON ---
-function json_escape(string s)
-    string r = replace($s, "\\", "\\\\")
-    r = replace($r, "\"", "\\\"")
-    r = replace($r, "\n", "\\n")
-    r = replace($r, "\r", "\\r")
-    r = replace($r, "\t", "\\t")
-    return "\"" + $r + "\""
+function json_escape(string cadena)
+    local string resultado = replace($cadena, "\\", "\\\\")
+    resultado = replace($resultado, "\"", "\\\"")
+    resultado = replace($resultado, "\n", "\\n")
+    resultado = replace($resultado, "\r", "\\r")
+    resultado = replace($resultado, "\t", "\\t")
+    return "\"" + $resultado + "\""
 fi
 
 # --- Serializa recursivamente un valor de Infernal a JSON.
-#     Solo se usa sobre maps y sus contenidos; si aparece un list
-#     anidado, también se serializa correctamente. ---
-function to_json(v)
-    string t = vartype($v)
+#     $prefijo es la indentación actual ("" al inicio).
+#     Si $compacto es true, se ignora la indentación y todo va en una línea.
+#
+#     IMPORTANTE: las variables temporales son `local`, porque en Infernal
+#     (igual que en bash) una declaración tipada sin `local` crea una
+#     variable global del script. En una función recursiva, eso hace que
+#     cada llamada pise las variables de su llamador. ---
+function to_json(valor, string prefijo, bool compacto)
+    local string tipo = vartype($valor)
 
-    if $t == "null" then
+    if $tipo == "null" then
         return "null"
     fi
 
-    if $t == "bool" then
-        if $v then
+    if $tipo == "bool" then
+        if $valor then
             return "true"
         fi
         return "false"
     fi
 
-    if $t == "int" then
-        return "" + $v
+    if $tipo == "int" then
+        return "" + $valor
     fi
 
-    if $t == "float" then
-        return "" + $v
+    if $tipo == "float" then
+        return "" + $valor
     fi
 
-    if $t == "string" then
-        return json_escape($v)
+    if $tipo == "string" then
+        return json_escape($valor)
     fi
 
-    if $t == "list" then
-        string s = "["
-        bool first = true
-        for item in $v then
-            if not first then
-                s = $s + ","
+    if $tipo == "list" then
+        local string resultado = "["
+        local bool es_primero = true
+        for elemento in $valor then
+            if not es_primero then
+                resultado = $resultado + ","
             fi
-            first = false
-            s = $s + to_json($item)
+            es_primero = false
+            if $compacto then
+                resultado = $resultado + to_json($elemento, "", true)
+            else
+                resultado = $resultado + "\n" + $prefijo + "  " + to_json($elemento, $prefijo + "  ", false)
+            fi
         fi
-        return $s + "]"
+        if $es_primero then
+            return "[]"
+        fi
+        if $compacto then
+            return $resultado + "]"
+        fi
+        return $resultado + "\n" + $prefijo + "]"
     fi
 
-    if $t == "map" then
-        string s = "{"
-        bool first = true
-        for k in $v then
-            if not first then
-                s = $s + ","
+    if $tipo == "map" then
+        local string resultado = "{"
+        local bool es_primero = true
+        for clave in $valor then
+            if not es_primero then
+                resultado = $resultado + ","
             fi
-            first = false
-            s = $s + json_escape($k) + ":" + to_json($v[$k])
+            es_primero = false
+            if $compacto then
+                resultado = $resultado + json_escape($clave) + ":" + to_json($valor[$clave], "", true)
+            else
+                resultado = $resultado + "\n" + $prefijo + "  " + json_escape($clave) + ": " + to_json($valor[$clave], $prefijo + "  ", false)
+            fi
         fi
-        return $s + "}"
+        if $es_primero then
+            return "{}"
+        fi
+        if $compacto then
+            return $resultado + "}"
+        fi
+        return $resultado + "\n" + $prefijo + "}"
     fi
 
     return "null"
@@ -114,21 +153,21 @@ fi
 
 # --- Flujo principal ---
 
-global map data = []
-data = fromfile($in_path)
+map datos = []
+datos = fromfile($ruta_entrada)
 
-string json_str = to_json($data)
+local string cadena_json = to_json($datos, "", $oneline)
 
-if $out_path == "" then
-    print($json_str)
+if $ruta_salida == "" then
+    print($cadena_json)
 else
-    if has($out_path, "'") then
-        error("La ruta de salida no puede contener comillas simples: " + $out_path)
+    if has($ruta_salida, "'") then
+        error("La ruta de salida no puede contener comillas simples: " + $ruta_salida)
     fi
-    string cmd = "cat > '" + $out_path + "' << 'INFERNAL_JSON_EOF'\n" + $json_str + "\nINFERNAL_JSON_EOF\n"
-    int code = exited($cmd)
-    if $code != 0 then
-        error("No se pudo escribir el archivo: " + $out_path)
+    local string comando = "cat > '" + $ruta_salida + "' << 'INFERNAL_JSON_EOF'\n" + $cadena_json + "\nINFERNAL_JSON_EOF\n"
+    local int codigo_salida = exited($comando)
+    if $codigo_salida != 0 then
+        error("No se pudo escribir el archivo: " + $ruta_salida)
     fi
-    print("JSON escrito en: " + $out_path)
+    print("JSON escrito en: " + $ruta_salida)
 fi
