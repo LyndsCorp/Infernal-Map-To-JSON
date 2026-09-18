@@ -1,0 +1,10 @@
+{
+  "links": [
+    {
+      "file": "map-to-json.inf",
+      "dest": "/usr/bin",
+      "name": "map-to-json",
+      "executable": true
+    }
+  ]
+}
