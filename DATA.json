@@ -1,0 +1,21 @@
+{
+    "name": "map-to-json",
+    "version": "https://raw.githubusercontent.com/LyndsCorp/Infernal-Map-To-JSON/refs/heads/main/VERSION",
+    "apt": [],
+    "pacman": [],
+    "dnf": [],
+    "pip": [],
+    "casata": ["infernal"],
+    "size": "5,1 KiB",
+    "description": "Convierte un archivo InfVar de map para Infernal a un JSON para JavaScript.",
+    "usage": "map-to-json archivo.map <salida.json> y si no hay salida.json, es stdout.",
+
+    "project": "Lynds Utils",
+    "is_open_source": true,
+    "source_code": "https://github.com/LyndsCorp/Infernal-Map-To-JSON",
+    "license": "MIT License",
+    "origin": "Lynds Corp",
+    "developer": "David Baña Szymaniak",
+    "copyright_title": "David Baña Szymaniak",
+    "copyright_year": 2026
+}
